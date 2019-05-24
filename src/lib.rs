@@ -1,12 +1,16 @@
 /// Macro for generating error types
 ///
-/// Implements `Error`, `Result` types
+/// Implements `Error`, `Result` types and all necessary traits for `Error`
 ///
 /// Parts of the `error_rules!` macro:
 ///
-/// - `name` - defining module name for error chaining. Will be a part of resulted string
-/// - `from` - defining types for conversion into `Error`
+/// - `name` - defining errors name for the error chaining. Will be a part of resulted string
+/// - `from` - defining types for conversion into `Error`.
+///            By the default implements conversion for `&str`, `String`.
+///            Types should be comma-separated
 /// - `errors` - defining custom error types
+///
+/// Usage:
 ///
 /// ```
 /// #[macro_use]
@@ -14,15 +18,15 @@
 ///
 /// error_rules! {
 ///     name = "App"
-///     from { &str }
+///     from { std::io::Error }
 ///     errors {
 ///         CustomError => ("custom error")
 ///     }
 /// }
 ///
 /// fn main() {
-///     let e = Error("error message".into());
-///     println!("{}", e);
+///     let e = Error::from("error message");
+///     assert_eq!(e.to_string().as_str(), "App => error message");
 /// }
 /// ```
 #[macro_export]
@@ -30,7 +34,7 @@ macro_rules! error_rules {
     () => {};
 
     (
-        from { $($arg:ty)* }
+        from { $($arg:ty,)* }
         $($tail:tt)*
     ) => {
         $( impl ::std::convert::From<$arg> for Error {
@@ -39,6 +43,16 @@ macro_rules! error_rules {
         } )*
 
         error_rules! { $($tail)* }
+    };
+
+    (
+        from { $($arg:ty),* }
+        $($tail:tt)*
+    ) => {
+        error_rules! {
+            from { $($arg,)* }
+            $($tail)*
+        }
     };
 
     (
@@ -148,6 +162,16 @@ macro_rules! error_rules {
             }
         }
 
+        impl ::std::convert::From<&str> for Error {
+            #[inline]
+            fn from(e: &str) -> Error { Error(e.into()) }
+        }
+
+        impl ::std::convert::From<String> for Error {
+            #[inline]
+            fn from(e: String) -> Error { Error(e.into()) }
+        }
+
         error_rules! { $($tail)* }
     };
 }
@@ -163,7 +187,6 @@ macro_rules! error_rules {
 ///
 /// error_rules! {
 ///     name = "App"
-///     from { &str }
 /// }
 ///
 /// fn run() -> Result<()> {
@@ -179,11 +202,11 @@ macro_rules! error_rules {
 #[macro_export]
 macro_rules! bail {
     ( $e:expr ) => {
-        return Err($e.into());
+        return Err($e.into())
     };
 
-    ( $fmt:expr, $($arg:tt)+ ) => {
-        return Err(format!($fmt, $($arg)+).into());
+    ( $fmt:expr, $($arg:tt),+ ) => {
+        return Err(format!($fmt, $($arg),+).into())
     };
 }
 
@@ -199,7 +222,6 @@ macro_rules! bail {
 ///
 /// error_rules! {
 ///     name = "App"
-///     from { &str }
 /// }
 ///
 /// fn run() -> Result<()> {
@@ -215,7 +237,11 @@ macro_rules! bail {
 /// ```
 #[macro_export]
 macro_rules! ensure {
-    ( $cond:expr, $($e:tt),* ) => {
-        if !($cond) { bail!($($e),*); }
+    ( $cond:expr, $e:expr ) => {
+        if ! ($cond) { bail!( $e ) }
+    };
+
+    ( $cond:expr, $fmt:expr, $($arg:tt),* ) => {
+        if ! ($cond) { bail!( $fmt, $($arg),* ) }
     };
 }
