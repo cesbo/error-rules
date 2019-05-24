@@ -34,14 +34,19 @@ macro_rules! error_rules {
     () => {};
 
     (
+        _from $arg:ty
+    ) => {
+        impl ::std::convert::From<$arg> for Error {
+            #[inline]
+            fn from(e: $arg) -> Error { Error(e.into()) }
+        }
+    };
+
+    (
         from { $($arg:ty,)* }
         $($tail:tt)*
     ) => {
-        $( impl ::std::convert::From<$arg> for Error {
-            #[inline]
-            fn from(e: $arg) -> Error { Error(e.into()) }
-        } )*
-
+        $( error_rules! { _from $arg } )*
         error_rules! { $($tail)* }
     };
 
@@ -49,41 +54,36 @@ macro_rules! error_rules {
         from { $($arg:ty),* }
         $($tail:tt)*
     ) => {
-        error_rules! {
-            from { $($arg,)* }
-            $($tail)*
+        error_rules! { from { $($arg,)* } }
+        error_rules! { $($tail)* }
+    };
+
+    (
+        _error_display $name:ident, ($text:expr)
+    ) => {
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                write!(f, $text)
+            }
         }
     };
 
     (
-        _error_display ($text:expr)
+        _error_display $name:ident, ($fmt:expr, $($arg:tt),+)
     ) => {
-        fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-            write!(f, $text)
-        }
-    };
-
-    (
-        _error_display ($fmt:expr, $($arg:tt),+)
-    ) => {
-        fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-            write!(f, $fmt, $(self.$arg),*)
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                write!(f, $fmt, $(self.$arg),*)
+            }
         }
     };
 
     (
         _error_stuff $name:ident $display:tt
     ) => {
-            impl ::std::fmt::Display for $name {
-                error_rules! { _error_display $display }
-            }
-
+            error_rules! { _error_display $name, $display }
             impl ::std::error::Error for $name {}
-
-            impl ::std::convert::From<$name> for Error {
-                #[inline]
-                fn from(e: $name) -> Error { Error(e.into()) }
-            }
+            error_rules! { _from $name }
     };
 
     ( _error ) => {};
@@ -113,7 +113,7 @@ macro_rules! error_rules {
         $($tail:tt)*
     ) => {
         #[derive(Debug)]
-        pub struct $name { $(pub $field: $type),+ }
+        pub struct $name { $(pub $field: $type),* }
         error_rules! { _error_stuff $name $display }
         error_rules! { _error $($tail)* }
     };
@@ -122,7 +122,8 @@ macro_rules! error_rules {
         _error $name:ident { $($field:tt: $type:ty),+ } => $display:tt
         $($tail:tt)*
     ) => {
-        error_rules! { _error $name { $($field:tt: $type:ty,)* } => $display $($tail)* }
+        error_rules! { _error $name { $($field:tt: $type:ty,)* } => $display }
+        error_rules! { _error $($tail)* }
     };
 
     (
@@ -162,15 +163,8 @@ macro_rules! error_rules {
             }
         }
 
-        impl ::std::convert::From<&str> for Error {
-            #[inline]
-            fn from(e: &str) -> Error { Error(e.into()) }
-        }
-
-        impl ::std::convert::From<String> for Error {
-            #[inline]
-            fn from(e: String) -> Error { Error(e.into()) }
-        }
+        error_rules! { _from &str }
+        error_rules! { _from String }
 
         error_rules! { $($tail)* }
     };
