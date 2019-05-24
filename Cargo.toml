@@ -1,0 +1,11 @@
+[package]
+name = "error-rules"
+version = "0.1.1"
+authors = ["Andrey Dyldin <and@cesbo.com>"]
+description = "Error handling and chaining abstraction"
+edition = "2018"
+keywords = ["error"]
+repository = "https://github.com/and-cesbo/error-rules"
+license = "MIT"
+
+[dependencies]
