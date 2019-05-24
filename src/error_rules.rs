@@ -13,8 +13,7 @@
 /// Usage:
 ///
 /// ```
-/// #[macro_use]
-/// extern crate error_rules;
+/// use error_rules::*;
 ///
 /// error_rules! {
 ///     name = "App"
@@ -24,10 +23,8 @@
 ///     }
 /// }
 ///
-/// fn main() {
-///     let e = Error::from("error message");
-///     assert_eq!(e.to_string().as_str(), "App => error message");
-/// }
+/// let e = Error::from("error message");
+/// assert_eq!(e.to_string().as_str(), "App => error message");
 /// ```
 #[macro_export]
 macro_rules! error_rules {
@@ -138,16 +135,9 @@ macro_rules! error_rules {
         name = $name:tt
         $($tail:tt)*
     ) => {
+        #[derive(Debug)]
         pub struct Error(Box<dyn ::std::error::Error>);
         pub type Result<T> = ::std::result::Result<T, Error>;
-
-        impl ::std::fmt::Debug for Error {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                f.debug_tuple($name)
-                    .field(&self.0)
-                    .finish()
-            }
-        }
 
         impl ::std::fmt::Display for Error {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
@@ -165,7 +155,6 @@ macro_rules! error_rules {
 
         error_rules! { _from &str }
         error_rules! { _from String }
-
         error_rules! { $($tail)* }
     };
 }
@@ -176,8 +165,7 @@ macro_rules! error_rules {
 /// Usage:
 ///
 /// ```
-/// #[macro_use]
-/// extern crate error_rules;
+/// use error_rules::*;
 ///
 /// error_rules! {
 ///     name = "App"
@@ -187,10 +175,8 @@ macro_rules! error_rules {
 ///     bail!("run error");
 /// }
 ///
-/// fn main() {
-///     if let Err(e) = run() {
-///         println!("{}", e);
-///     }
+/// if let Err(e) = run() {
+///     println!("{}", e);
 /// }
 /// ```
 #[macro_export]
@@ -211,8 +197,7 @@ macro_rules! bail {
 /// /// Usage:
 ///
 /// ```
-/// #[macro_use]
-/// extern crate error_rules;
+/// use error_rules::*;
 ///
 /// error_rules! {
 ///     name = "App"
@@ -223,10 +208,8 @@ macro_rules! bail {
 ///     Ok(())
 /// }
 ///
-/// fn main() {
-///     if let Err(e) = run() {
-///         println!("{}", e);
-///     }
+/// if let Err(e) = run() {
+///     println!("{}", e);
 /// }
 /// ```
 #[macro_export]
