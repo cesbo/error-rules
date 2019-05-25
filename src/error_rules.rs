@@ -1,62 +1,81 @@
 /// Macro for generating error types
 ///
-/// Implements `Error`, `Result` types and all necessary traits for `Error`
+/// ## Declaring error types
+/// Macro `error_rules!` implements `Error`, `Result` types and all necessary traits for `Error`.
+/// Arguments should be comma-separated. available next arguments:
 ///
-/// Parts of the `error_rules!` macro:
+/// 1. error display text. should be first argument
+/// 2. error types for conversions into `Error` chain.
+///    By the default implements conversion for: `&str`, `String`
+/// 3. custom error types
 ///
-/// - `name` - defining errors name for the error chaining. Will be a part of resulted string
-/// - `from` - defining types for conversion into `Error`.
-///            By the default implements conversion for `&str`, `String`.
-///            Types should be comma-separated
-/// - `errors` - defining custom error types
-///
-/// Usage:
+/// Basic usage:
 ///
 /// ```
 /// use error_rules::*;
 ///
 /// error_rules! {
-///     name = "App"
-///     from { std::io::Error }
-///     errors {
-///         CustomError => ("custom error")
-///     }
+///     "app error"
 /// }
 ///
-/// let e = Error::from("error message");
-/// assert_eq!(e.to_string().as_str(), "App => error message");
+/// assert_eq!(
+///     Error::from("error message").to_string().as_str(),
+///     "app error => error message");
+/// ```
+///
+/// ## Custom error types
+///
+/// Custom error without fields:
+///
+/// ```
+/// # use error_rules::*;
+/// error_rules! {
+///     "app error",
+///     CustomError => ("custom error"),
+/// }
+///
+/// assert_eq!(
+///     Error::from(CustomError).to_string().as_str(),
+///     "app error => custom error");
+/// ```
+///
+/// Custom error with fields:
+///
+/// ```
+/// # use error_rules::*;
+/// error_rules! {
+///     "app error",
+///     CustomError(usize) => ("custom error value:{}", 0),
+/// }
+///
+/// assert_eq!(
+///     Error::from(CustomError(100)).to_string().as_str(),
+///     "app error => custom error value:100");
+/// ```
+///
+/// or named fields:
+///
+/// ```
+/// # use error_rules::*;
+/// error_rules! {
+///     "app error",
+///     CustomError {
+///         value: usize,
+///     } => ("custom error value:{}", value),
+/// }
+///
+/// assert_eq!(
+///     Error::from(CustomError { value: 100 }).to_string().as_str(),
+///     "app error => custom error value:100");
 /// ```
 #[macro_export]
 macro_rules! error_rules {
     () => {};
 
-    (
-        _from $arg:ty
-    ) => {
-        impl ::std::convert::From<$arg> for Error {
-            #[inline]
-            fn from(e: $arg) -> Error { Error(e.into()) }
-        }
-    };
+    /* display */
 
     (
-        from { $($arg:ty,)* }
-        $($tail:tt)*
-    ) => {
-        $( error_rules! { _from $arg } )*
-        error_rules! { $($tail)* }
-    };
-
-    (
-        from { $($arg:ty),* }
-        $($tail:tt)*
-    ) => {
-        error_rules! { from { $($arg,)* } }
-        error_rules! { $($tail)* }
-    };
-
-    (
-        _error_display $name:ident, ($text:expr)
+        _display $name:ident, ($text:expr)
     ) => {
         impl ::std::fmt::Display for $name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
@@ -66,7 +85,7 @@ macro_rules! error_rules {
     };
 
     (
-        _error_display $name:ident, ($fmt:expr, $($arg:tt),+)
+        _display $name:ident, ($fmt:expr, $($arg:tt),+)
     ) => {
         impl ::std::fmt::Display for $name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
@@ -75,75 +94,111 @@ macro_rules! error_rules {
         }
     };
 
+    /* custom errors */
+
     (
-        _error_stuff $name:ident $display:tt
+        _error_stuff $name:ident, $display:tt
     ) => {
-            error_rules! { _error_display $name, $display }
+            error_rules! { _display $name, $display }
             impl ::std::error::Error for $name {}
-            error_rules! { _from $name }
+            error_rules! { $name } /* from */
     };
 
-    ( _error ) => {};
-
     (
-        _error $name:ident => $display:tt
-        $($tail:tt)*
+        $name:ident => $display:tt
     ) => {
         #[derive(Debug)]
         pub struct $name;
-        error_rules! { _error_stuff $name $display }
-        error_rules! { _error $($tail)* }
+        error_rules! { _error_stuff $name, $display }
     };
 
     (
-        _error $name:ident ( $($field:tt),+ ) => $display:tt
+        $name:ident => $display:tt,
         $($tail:tt)*
     ) => {
-        #[derive(Debug)]
-        pub struct $name ( $(pub $field),* );
-        error_rules! { _error_stuff $name $display }
-        error_rules! { _error $($tail)* }
-    };
-
-    (
-        _error $name:ident { $($field:tt: $type:ty,)+ } => $display:tt
-        $($tail:tt)*
-    ) => {
-        #[derive(Debug)]
-        pub struct $name { $(pub $field: $type),* }
-        error_rules! { _error_stuff $name $display }
-        error_rules! { _error $($tail)* }
-    };
-
-    (
-        _error $name:ident { $($field:tt: $type:ty),+ } => $display:tt
-        $($tail:tt)*
-    ) => {
-        error_rules! { _error $name { $($field:tt: $type:ty,)* } => $display }
-        error_rules! { _error $($tail)* }
-    };
-
-    (
-        errors { $($error:tt)* }
-        $($tail:tt)*
-    ) => {
-        error_rules! { _error $($error)* }
+        error_rules! { $name => $display }
         error_rules! { $($tail)* }
     };
 
     (
-        name = $name:tt
+        $name:ident ( $($field:ty),* ) => $display:tt
+    ) => {
+        #[derive(Debug)]
+        pub struct $name ( $(pub $field),* );
+        error_rules! { _error_stuff $name, $display }
+    };
+
+    (
+        $name:ident ( $($field:ty,)* ) => $display:tt
+    ) => {
+        error_rules! { $name ( $($field),* ) => $display }
+    };
+
+    (
+        $name:ident { $($field:ident: $type:ty),* } => $display:tt
+    ) => {
+        #[derive(Debug)]
+        pub struct $name { $(pub $field: $type),* }
+        error_rules! { _error_stuff $name, $display }
+    };
+
+    (
+        $name:ident { $($field:ident: $type:ty,)* } => $display:tt
+    ) => {
+        error_rules! { $name { $($field: $type),* } => $display }
+    };
+
+    (
+        $name:ident $fields:tt => $display:tt,
         $($tail:tt)*
+    ) => {
+        error_rules! { $name $fields => $display }
+        error_rules! { $($tail)* }
+    };
+
+    /* from */
+
+    (
+        $arg:ty
+    ) => {
+        impl ::std::convert::From<$arg> for Error {
+            #[inline]
+            fn from(e: $arg) -> Error {
+                Error::from(Into::<Box<dyn ::std::error::Error>>::into(e))
+            }
+        }
+    };
+
+    (
+        $from:ty,
+        $($tail:tt)*
+    ) => {
+        error_rules! { $from }
+        error_rules! { $($tail)* }
+    };
+
+    /* error */
+
+    (
+        $text:tt
     ) => {
         #[derive(Debug)]
         pub struct Error(Box<dyn ::std::error::Error>);
         pub type Result<T> = ::std::result::Result<T, Error>;
 
+        // TODO: chain
+        // error_rules! { _display Error, ($text) }
+
         impl ::std::fmt::Display for Error {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                write!(f, "{} => ", $name)?;
+                write!(f, "{} => ", $text)?;
                 ::std::fmt::Display::fmt(&self.0, f)
             }
+        }
+
+        impl From<Box<dyn ::std::error::Error>> for Error {
+            #[inline]
+            fn from(e: Box<dyn ::std::error::Error>) -> Error { Error(e) }
         }
 
         impl ::std::error::Error for Error {
@@ -153,8 +208,15 @@ macro_rules! error_rules {
             }
         }
 
-        error_rules! { _from &str }
-        error_rules! { _from String }
+        error_rules! { &str }
+        error_rules! { String }
+    };
+
+    (
+        $text:tt,
+        $($tail:tt)*
+    ) => {
+        error_rules! { $text }
         error_rules! { $($tail)* }
     };
 }
@@ -165,10 +227,9 @@ macro_rules! error_rules {
 /// Usage:
 ///
 /// ```
-/// use error_rules::*;
-///
+/// # use error_rules::*;
 /// error_rules! {
-///     name = "App"
+///     "app error"
 /// }
 ///
 /// fn run() -> Result<()> {
@@ -197,10 +258,9 @@ macro_rules! bail {
 /// /// Usage:
 ///
 /// ```
-/// use error_rules::*;
-///
+/// # use error_rules::*;
 /// error_rules! {
-///     name = "App"
+///     "app error"
 /// }
 ///
 /// fn run() -> Result<()> {
