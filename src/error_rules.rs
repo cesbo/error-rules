@@ -183,22 +183,29 @@ macro_rules! error_rules {
         $text:tt
     ) => {
         #[derive(Debug)]
-        pub struct Error(Box<dyn ::std::error::Error>);
+        pub struct Error(Box<dyn ::std::error::Error>, String);
         pub type Result<T> = ::std::result::Result<T, Error>;
+
+        impl Error {
+            #[inline]
+            pub fn note<R: AsRef<str>>(&mut self, text: R) {
+                self.1.clear();
+                self.1.push_str(text.as_ref());
+            }
+        }
 
         // TODO: chain
         // error_rules! { _display Error, ($text) }
-
         impl ::std::fmt::Display for Error {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                write!(f, "{} => ", $text)?;
+                write!(f, "{}{} => ", $text, &self.1)?;
                 ::std::fmt::Display::fmt(&self.0, f)
             }
         }
 
         impl From<Box<dyn ::std::error::Error>> for Error {
             #[inline]
-            fn from(e: Box<dyn ::std::error::Error>) -> Error { Error(e) }
+            fn from(e: Box<dyn ::std::error::Error>) -> Error { Error(e, String::default()) }
         }
 
         impl ::std::error::Error for Error {
