@@ -68,6 +68,25 @@
 ///     Error::from(CustomError { value: 100 }).to_string().as_str(),
 ///     "app error => custom error value:100");
 /// ```
+///
+/// ## Error context
+///
+/// `context()` method appends additional information into error description.
+/// For example will be useful to get know which file unavailable on `File::open()`.
+///
+/// ```
+/// # use error_rules::*;
+/// error_rules! {
+///     "file reader",
+///     std::io::Error,
+/// }
+///
+/// let n = "not-found.txt";
+/// let e = std::fs::File::open(n).context(n).unwrap_err();
+/// assert_eq!(
+///     e.to_string().as_str(),
+///     "file reader not-found.txt => No such file or directory (os error 2)");
+/// ```
 #[macro_export]
 macro_rules! error_rules {
     () => {};
@@ -183,40 +202,52 @@ macro_rules! error_rules {
         $text:tt
     ) => {
         #[derive(Debug)]
-        pub struct Error(Box<dyn ::std::error::Error>, String);
+        pub struct Error {
+            inner: Box<dyn ::std::error::Error>,
+            context: String,
+        }
         pub type Result<T> = ::std::result::Result<T, Error>;
 
+        // TODO: fix
         impl ::std::fmt::Display for Error {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                write!(f, "{}{} => ", $text, &self.1)?;
-                ::std::fmt::Display::fmt(&self.0, f)
+                if self.context.is_empty() {
+                    write!(f, "{} => {}", $text, &self.inner)
+                } else {
+                    write!(f, "{} {} => {}", $text, &self.context, &self.inner)
+                }
             }
         }
 
         impl From<Box<dyn ::std::error::Error>> for Error {
             #[inline]
-            fn from(e: Box<dyn ::std::error::Error>) -> Error { Error(e, String::default()) }
+            fn from(e: Box<dyn ::std::error::Error>) -> Error {
+                Error {
+                    inner: e,
+                    context: String::default(),
+                }
+            }
         }
 
         impl ::std::error::Error for Error {
             #[inline]
             fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
-                Some(self.0.as_ref())
+                Some(self.inner.as_ref())
             }
         }
 
         // Trait for `Result` to convert into `Error` and set error context
-        pub trait ResultExt<T, E> {
-            fn context<C: ::error_rules::ErrorContext>(self, ctx: &C) -> ::std::result::Result<T, E>;
+        pub trait ResultExt<T> {
+            fn context<S: ToString>(self, ctx: S) -> Result<T>;
         }
 
-        impl<T, E: Into<Error>> ResultExt<T, Error> for ::std::result::Result<T, E> {
-            fn context<C: ::error_rules::ErrorContext>(self, ctx: &C) -> ::std::result::Result<T, Error> {
+        impl<T, E: Into<Error>> ResultExt<T> for ::std::result::Result<T, E> {
+            fn context<S: ToString>(self, ctx: S) -> Result<T> {
                 match self {
                     Ok(v) => Ok(v),
                     Err(e) => {
                         let mut e = Into::<Error>::into(e);
-                        ctx.context(&mut e.1);
+                        e.context = ctx.to_string();
                         Err(e)
                     }
                 }
