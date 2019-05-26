@@ -186,16 +186,6 @@ macro_rules! error_rules {
         pub struct Error(Box<dyn ::std::error::Error>, String);
         pub type Result<T> = ::std::result::Result<T, Error>;
 
-        impl Error {
-            #[inline]
-            pub fn note<R: AsRef<str>>(&mut self, text: R) {
-                self.1.clear();
-                self.1.push_str(text.as_ref());
-            }
-        }
-
-        // TODO: chain
-        // error_rules! { _display Error, ($text) }
         impl ::std::fmt::Display for Error {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 write!(f, "{}{} => ", $text, &self.1)?;
@@ -212,6 +202,13 @@ macro_rules! error_rules {
             #[inline]
             fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
                 Some(self.0.as_ref())
+            }
+        }
+
+        impl Error {
+            #[inline]
+            pub fn context<C: ::error_rules::ErrorContext>(&mut self, ctx: &C) {
+                ctx.context(&mut self.1)
             }
         }
 
