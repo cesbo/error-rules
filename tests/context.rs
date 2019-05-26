@@ -1,8 +1,5 @@
 #[macro_use]
 extern crate error_rules;
-
-use std::fmt;
-
 use error_rules::ErrorContext;
 
 
@@ -14,17 +11,22 @@ fn test_context() {
 
     struct Foo(usize);
     impl ErrorContext for Foo {
-        fn context<F: fmt::Write>(&self, f: &mut F) {
+        fn context<F: std::fmt::Write>(&self, f: &mut F) {
             write!(f, " (foo-{})", self.0).unwrap()
         }
     }
 
     let foo = Foo(1234);
 
-    let mut e = e::Error::from("message");
-    e.context(&foo);
+    let r: Result<(), String> = Err("error".to_owned());
+    let r = e::ResultExt::context(r, &foo);
 
-    assert_eq!(
-        e.to_string().as_str(),
-        "test error (note) => message");
+    match r {
+        Ok(_) => unreachable!(),
+        Err(e) => {
+            assert_eq!(
+                e.to_string().as_str(),
+                "test error (foo-1234) => error");
+        }
+    };
 }

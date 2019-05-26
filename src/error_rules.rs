@@ -205,10 +205,21 @@ macro_rules! error_rules {
             }
         }
 
-        impl Error {
-            #[inline]
-            pub fn context<C: ::error_rules::ErrorContext>(&mut self, ctx: &C) {
-                ctx.context(&mut self.1)
+        // Trait for `Result` to convert into `Error` and set error context
+        pub trait ResultExt<T, E> {
+            fn context<C: ::error_rules::ErrorContext>(self, ctx: &C) -> ::std::result::Result<T, E>;
+        }
+
+        impl<T, E: Into<Error>> ResultExt<T, Error> for ::std::result::Result<T, E> {
+            fn context<C: ::error_rules::ErrorContext>(self, ctx: &C) -> ::std::result::Result<T, Error> {
+                match self {
+                    Ok(v) => Ok(v),
+                    Err(e) => {
+                        let mut e = Into::<Error>::into(e);
+                        ctx.context(&mut e.1);
+                        Err(e)
+                    }
+                }
             }
         }
 
