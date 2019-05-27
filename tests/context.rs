@@ -7,7 +7,9 @@ extern crate error_rules;
 #[test]
 fn test_context() {
     mod e {
-        error_rules! { "test error" }
+        error_rules! {
+            self => ("test error ({}) => {}", context, error)
+        }
     }
 
     struct Foo(usize);
@@ -27,7 +29,7 @@ fn test_context() {
         Err(e) => {
             assert_eq!(
                 e.to_string().as_str(),
-                "test error foo-1234 => error");
+                "test error (foo-1234) => error");
         }
     };
 }

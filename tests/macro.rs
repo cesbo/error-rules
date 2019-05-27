@@ -3,7 +3,7 @@ extern crate error_rules;
 
 mod e {
     error_rules! {
-        "Test",
+        self => ("Test => {}", error),
         CustomError => ("custom error"),
     }
 }
@@ -99,7 +99,7 @@ fn test_ensure_errors() {
 fn test_custom_wo_arg() {
     mod c0 {
         error_rules! {
-            "test",
+            self => ("test"),
             Custom => ("custom"),
         }
     }
@@ -108,7 +108,7 @@ fn test_custom_wo_arg() {
 
     mod t0 {
         error_rules! {
-            "test",
+            self => ("test"),
             Custom() => ("custom"),
         }
     }
@@ -117,7 +117,7 @@ fn test_custom_wo_arg() {
 
     mod s0 {
         error_rules! {
-            "test",
+            self => ("test"),
             Custom{} => ("custom"),
         }
     }
@@ -129,14 +129,14 @@ fn test_custom_wo_arg() {
 fn test_custom_w1_arg() {
     mod t1 {
         error_rules! {
-            "test",
+            self => ("test"),
             Custom(usize) => ("custom:{}", 0),
         }
     }
 
     mod t1c {
         error_rules! {
-            "test",
+            self => ("test"),
             Custom(usize,) => ("custom:{}", 0),
         }
     }
@@ -146,14 +146,14 @@ fn test_custom_w1_arg() {
 
     mod s1 {
         error_rules! {
-            "test",
+            self => ("test"),
             Custom{ v1: usize } => ("custom:{}", v1),
         }
     }
 
     mod s1c {
         error_rules! {
-            "test",
+            self => ("test"),
             Custom {
                 v1: usize,
             } => ("custom:{}", v1),
@@ -168,7 +168,7 @@ fn test_custom_w1_arg() {
 fn test_custom_w2_arg() {
     mod t2 {
         error_rules! {
-            "test",
+            self => ("test"),
             Custom(usize, usize) => ("custom:{}:{}", 0, 1),
         }
     }
@@ -177,7 +177,7 @@ fn test_custom_w2_arg() {
 
     mod s2 {
         error_rules! {
-            "test",
+            self => ("test"),
             Custom {
                 v1: usize,
                 v2: usize,

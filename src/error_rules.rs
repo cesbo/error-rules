@@ -1,21 +1,23 @@
 /// Macro for generating error types
 ///
 /// ## Declaring error types
+///
 /// Macro `error_rules!` implements `Error`, `Result` types and all necessary traits for `Error`.
-/// Arguments should be comma-separated. available next arguments:
+/// All arguments should be comma-separated.
 ///
-/// 1. error display text. should be first argument
-/// 2. error types for conversions into `Error` chain.
-///    By the default implements conversion for: `&str`, `String`
-/// 3. custom error types
+/// ## Display format
 ///
-/// Basic usage:
+/// Error display text defines in tuple after `self =>` keyword.
+/// First tuple argument is a format string. Additional arguments:
+///
+/// - `error` - chained error text
+/// - `context` - context for this error
 ///
 /// ```
 /// use error_rules::*;
 ///
 /// error_rules! {
-///     "app error"
+///     self => ("app error => {}", error)
 /// }
 ///
 /// assert_eq!(
@@ -23,14 +25,36 @@
 ///     "app error => error message");
 /// ```
 ///
+/// ## Error types
+///
+/// After display text you could define error types for conversions into `Error` chain.
+/// By the default implements conversion for: `&str`, `String`
+///
+/// ```
+/// use std::io;
+/// use error_rules::*;
+///
+/// error_rules! {
+///     self => ("app error => {}", error),
+///     std::io::Error,
+/// }
+///
+/// let io_error = io::Error::new(io::ErrorKind::Other, "io-error");
+/// assert_eq!(
+///     Error::from(io_error).to_string().as_str(),
+///     "app error => io-error");
+/// ```
+///
 /// ## Custom error types
 ///
-/// Custom error without fields:
+/// Custom errors is an additional error kind to use with `Error`.
+/// Defines like `struct` with display arguments after `=>` keyword.
+/// Could be defined without fields:
 ///
 /// ```
 /// # use error_rules::*;
 /// error_rules! {
-///     "app error",
+///     self => ("app error => {}", error),
 ///     CustomError => ("custom error"),
 /// }
 ///
@@ -39,12 +63,12 @@
 ///     "app error => custom error");
 /// ```
 ///
-/// Custom error with fields:
+/// or with fields:
 ///
 /// ```
 /// # use error_rules::*;
 /// error_rules! {
-///     "app error",
+///     self => ("app error => {}", error),
 ///     CustomError(usize) => ("custom error value:{}", 0),
 /// }
 ///
@@ -53,12 +77,12 @@
 ///     "app error => custom error value:100");
 /// ```
 ///
-/// or named fields:
+/// or with named fields:
 ///
 /// ```
 /// # use error_rules::*;
 /// error_rules! {
-///     "app error",
+///     self => ("app error => {}", error),
 ///     CustomError {
 ///         value: usize,
 ///     } => ("custom error value:{}", value),
@@ -77,7 +101,7 @@
 /// ```
 /// # use error_rules::*;
 /// error_rules! {
-///     "file reader",
+///     self => ("file reader ({}) => {}", context, error),
 ///     std::io::Error,
 /// }
 ///
@@ -85,11 +109,72 @@
 /// let e = std::fs::File::open(n).context(n).unwrap_err();
 /// assert_eq!(
 ///     e.to_string().as_str(),
-///     "file reader not-found.txt => No such file or directory (os error 2)");
+///     "file reader (not-found.txt) => No such file or directory (os error 2)");
 /// ```
 #[macro_export]
 macro_rules! error_rules {
     () => {};
+
+    /* error */
+
+    (
+        self => $display:tt
+    ) => {
+        #[derive(Debug)]
+        pub struct Error {
+            error: Box<dyn ::std::error::Error>,
+            context: String,
+        }
+        pub type Result<T> = ::std::result::Result<T, Error>;
+
+        error_rules! { _display Error, $display }
+
+        impl From<Box<dyn ::std::error::Error>> for Error {
+            #[inline]
+            fn from(e: Box<dyn ::std::error::Error>) -> Error {
+                Error {
+                    error: e,
+                    context: String::default(),
+                }
+            }
+        }
+
+        impl ::std::error::Error for Error {
+            #[inline]
+            fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+                Some(self.error.as_ref())
+            }
+        }
+
+        // Trait for `Result` to convert into `Error` and set error context
+        pub trait ResultExt<T> {
+            fn context<S: ToString>(self, ctx: S) -> Result<T>;
+        }
+
+        impl<T, E: Into<Error>> ResultExt<T> for ::std::result::Result<T, E> {
+            fn context<S: ToString>(self, ctx: S) -> Result<T> {
+                match self {
+                    Ok(v) => Ok(v),
+                    Err(e) => {
+                        let mut e = Into::<Error>::into(e);
+                        e.context = ctx.to_string();
+                        Err(e)
+                    }
+                }
+            }
+        }
+
+        error_rules! { &str }
+        error_rules! { String }
+    };
+
+    (
+        self => $display:tt,
+        $($tail:tt)*
+    ) => {
+        error_rules! { self => $display }
+        error_rules! { $($tail)* }
+    };
 
     /* display */
 
@@ -195,76 +280,6 @@ macro_rules! error_rules {
         error_rules! { $from }
         error_rules! { $($tail)* }
     };
-
-    /* error */
-
-    (
-        $text:tt
-    ) => {
-        #[derive(Debug)]
-        pub struct Error {
-            inner: Box<dyn ::std::error::Error>,
-            context: String,
-        }
-        pub type Result<T> = ::std::result::Result<T, Error>;
-
-        // TODO: fix
-        impl ::std::fmt::Display for Error {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                if self.context.is_empty() {
-                    write!(f, "{} => {}", $text, &self.inner)
-                } else {
-                    write!(f, "{} {} => {}", $text, &self.context, &self.inner)
-                }
-            }
-        }
-
-        impl From<Box<dyn ::std::error::Error>> for Error {
-            #[inline]
-            fn from(e: Box<dyn ::std::error::Error>) -> Error {
-                Error {
-                    inner: e,
-                    context: String::default(),
-                }
-            }
-        }
-
-        impl ::std::error::Error for Error {
-            #[inline]
-            fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
-                Some(self.inner.as_ref())
-            }
-        }
-
-        // Trait for `Result` to convert into `Error` and set error context
-        pub trait ResultExt<T> {
-            fn context<S: ToString>(self, ctx: S) -> Result<T>;
-        }
-
-        impl<T, E: Into<Error>> ResultExt<T> for ::std::result::Result<T, E> {
-            fn context<S: ToString>(self, ctx: S) -> Result<T> {
-                match self {
-                    Ok(v) => Ok(v),
-                    Err(e) => {
-                        let mut e = Into::<Error>::into(e);
-                        e.context = ctx.to_string();
-                        Err(e)
-                    }
-                }
-            }
-        }
-
-        error_rules! { &str }
-        error_rules! { String }
-    };
-
-    (
-        $text:tt,
-        $($tail:tt)*
-    ) => {
-        error_rules! { $text }
-        error_rules! { $($tail)* }
-    };
 }
 
 
@@ -275,15 +290,17 @@ macro_rules! error_rules {
 /// ```
 /// # use error_rules::*;
 /// error_rules! {
-///     "app error"
+///     self => ("{}", error)
 /// }
 ///
 /// fn run() -> Result<()> {
-///     bail!("run error");
+///     bail!("bail error");
 /// }
 ///
 /// if let Err(e) = run() {
-///     println!("{}", e);
+///     assert_eq!(e.to_string().as_str(), "bail error")
+/// } else {
+///     unreachable!()
 /// }
 /// ```
 #[macro_export]
@@ -306,7 +323,7 @@ macro_rules! bail {
 /// ```
 /// # use error_rules::*;
 /// error_rules! {
-///     "app error"
+///     self => ("{}", error)
 /// }
 ///
 /// fn run() -> Result<()> {
@@ -315,7 +332,9 @@ macro_rules! bail {
 /// }
 ///
 /// if let Err(e) = run() {
-///     println!("{}", e);
+///     assert_eq!(e.to_string().as_str(), "ensure error")
+/// } else {
+///     unreachable!()
 /// }
 /// ```
 #[macro_export]
