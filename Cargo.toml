@@ -1,6 +1,6 @@
 [package]
 name = "error-rules"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Andrey Dyldin <and@cesbo.com>"]
 description = "Chained error handling"
 documentation = "https://docs.rs/error-rules"
