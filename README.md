@@ -7,13 +7,71 @@ Chained error handling in Rust.
 
 ## Intro
 
-Key feature of the `error-rules` is chained error handling without pain.
+Key feature of the `error-rules` is chained error handling.
 
-For example your application have nested modules: app -> garage -> car -> engine. \
-But how to know where this error happens? Should be saved error context for each module.
-To do that could be use `.map_err()` before each `?` operator. But this way is too verbose.
+Idea is simple, each module has own error handler.
+Source error wrapped into error handler with configurable display text.
 
-The `error-rules` macro will do that automaticaly.
-Idea is simple, each module has own error handler with configurable display text.
-It pass source error wrapped into own error handler with custom display text.
-So app will get error with text like: "Garage => Car => Engine => resource temporarily unavailable"
+## Usage
+
+```rust
+#[macro_use]
+extern crate error_rules;
+
+pub mod human {
+    use std::io;
+
+    error_rules! {
+        Error => ("Human => {}", error),
+        io::Error,
+    }
+
+    #[derive(Default)]
+    pub struct Human;
+
+    impl Human {
+        pub fn invoke_failure(&self) -> Result<()> {
+            bail!(io::Error::from(io::ErrorKind::PermissionDenied));
+        }
+    }
+}
+
+pub mod bike {
+    use std::io;
+    use crate::human;
+
+    error_rules! {
+        Error => ("Bike => {}", error),
+        io::Error,
+        human::Error,
+    }
+
+    #[derive(Default)]
+    pub struct Bike(human::Human);
+
+    impl Bike {
+        pub fn ride(&self) -> Result<()> {
+            self.0.invoke_failure()?;
+            Ok(())
+        }
+
+        pub fn invoke_failure(&self) -> Result<()> {
+            bail!(io::Error::from(io::ErrorKind::PermissionDenied));
+        }
+    }
+}
+
+let b = bike::Bike::default();
+
+let error = b.ride().unwrap_err();
+assert_eq!(
+    error.to_string().as_str(),
+    "Bike => Human => permission denied"
+);
+
+let error = b.invoke_failure().unwrap_err();
+assert_eq!(
+    error.to_string().as_str(),
+    "Bike => permission denied"
+);
+```

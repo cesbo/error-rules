@@ -6,12 +6,11 @@ macro_rules! error_rules {
     /* error */
 
     (
-        self => $display:tt
+        Error => $display:tt
     ) => {
         #[derive(Debug)]
         pub struct Error {
             error: Box<dyn ::std::error::Error>,
-            context: String,
         }
         pub type Result<T> = ::std::result::Result<T, Error>;
 
@@ -22,7 +21,6 @@ macro_rules! error_rules {
             fn from(e: Box<dyn ::std::error::Error>) -> Error {
                 Error {
                     error: e,
-                    context: String::default(),
                 }
             }
         }
@@ -34,33 +32,15 @@ macro_rules! error_rules {
             }
         }
 
-        // Trait for `Result` to convert into `Error` and set error context
-        pub trait ResultExt<T> {
-            fn context<S: ToString>(self, ctx: S) -> Result<T>;
-        }
-
-        impl<T, E: Into<Error>> ResultExt<T> for ::std::result::Result<T, E> {
-            fn context<S: ToString>(self, ctx: S) -> Result<T> {
-                match self {
-                    Ok(v) => Ok(v),
-                    Err(e) => {
-                        let mut e = Into::<Error>::into(e);
-                        e.context = ctx.to_string();
-                        Err(e)
-                    }
-                }
-            }
-        }
-
         error_rules! { &str }
         error_rules! { String }
     };
 
     (
-        self => $display:tt,
+        Error => $display:tt,
         $($tail:tt)*
     ) => {
-        error_rules! { self => $display }
+        error_rules! { Error => $display }
         error_rules! { $($tail)* }
     };
 
@@ -178,7 +158,7 @@ macro_rules! error_rules {
 /// ```
 /// # use error_rules::*;
 /// error_rules! {
-///     self => ("{}", error)
+///     Error => ("{}", error)
 /// }
 ///
 /// fn run() -> Result<()> {
@@ -206,12 +186,12 @@ macro_rules! bail {
 /// Ensure that a boolean expression is true at runtime.
 /// If condition is false then invokes `bail!` macro
 ///
-/// /// Usage:
+/// Usage:
 ///
 /// ```
 /// # use error_rules::*;
 /// error_rules! {
-///     self => ("{}", error)
+///     Error => ("{}", error)
 /// }
 ///
 /// fn run() -> Result<()> {
