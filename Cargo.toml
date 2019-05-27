@@ -2,10 +2,11 @@
 name = "error-rules"
 version = "0.1.1"
 authors = ["Andrey Dyldin <and@cesbo.com>"]
-description = "Error handling and chaining abstraction"
+description = "Chained error handling"
+documentation = "https://docs.rs/error-rules"
+repository = "https://github.com/cesbo/error-rules"
 edition = "2018"
 keywords = ["error"]
-repository = "https://github.com/and-cesbo/error-rules"
 license = "MIT"
 
 [dependencies]

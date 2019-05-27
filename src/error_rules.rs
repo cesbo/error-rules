@@ -1,9 +1,24 @@
-/// Macro for generating error types
+/// Macro for chained error handling
+///
+/// ## Intro
+///
+/// Key feature of the `error-rules` crate is chained error handling without pain.
+/// For example your application have nested modules: app -> garage -> car -> engine.
+/// But how to know where this error happens?
+/// Should be saved error context for each module.
+/// To do that could be use `.map_err()` before each `?` operator. But this way is too verbose.
+/// The `error-rules` macro will do that automaticaly.
+/// Idea is simple, each module has own error handler with configurable display text.
+/// It pass source error wrapped into own error handler with custom display text.
+/// So app will get error with text like: "Garage => Car => Engine => resource temporarily unavailable"
 ///
 /// ## Declaring error types
 ///
 /// Macro `error_rules!` implements `Error`, `Result` types and all necessary traits for `Error`.
 /// All arguments should be comma-separated.
+///
+/// To prevent types shadowing all errors from standard library and other crates should be used
+/// with module name. For example: `io::Error`.
 ///
 /// ## Display format
 ///
@@ -95,7 +110,7 @@
 ///
 /// ## Error context
 ///
-/// `context()` method appends additional information into error description.
+/// Error context let to append additional information into error description.
 /// For example will be useful to get know which file unavailable on `File::open()`.
 ///
 /// ```
