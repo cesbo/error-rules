@@ -9,4 +9,10 @@ edition = "2018"
 keywords = ["error"]
 license = "MIT"
 
+[lib]
+proc-macro = true
+
 [dependencies]
+quote = "0.6"
+syn = "0.15"
+proc-macro2 = "0.4"
