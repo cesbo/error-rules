@@ -21,28 +21,19 @@ pub fn error_rules_derive(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 }
 
 
-fn impl_display_item(meta: &syn::Meta) -> TokenStream {
-    let meta_list = match meta {
-        syn::Meta::List(v) => v,
-        _ => panic!("display() format mismatch"),
-    };
-
-    if meta_list.nested.is_empty() {
-        panic!("display() should have one or more attributes")
-    }
-
+fn impl_display_item(meta_list: &syn::MetaList) -> TokenStream {
     let mut attr_list: Vec<TokenStream> = Vec::new();
 
     let fmt = match &meta_list.nested[0] {
         syn::NestedMeta::Literal(syn::Lit::Str(v)) => v.value(),
-        _ => panic!("display() first attribute shoud be literal"),
+        _ => panic!("first attribute shoud be literal"),
     };
     attr_list.push(quote! { #fmt });
 
     for attr in meta_list.nested.iter().skip(1) {
         let attr = match attr {
             syn::NestedMeta::Literal(syn::Lit::Int(v)) => v.value(),
-            _ => panic!("display() attributes should be number"),
+            _ => panic!("attributes should be number"),
         };
 
         let attr_id = Ident::new(&format!("i{}", attr), Span::call_site());
@@ -82,8 +73,12 @@ fn impl_error_rules_derive(input: &syn::DeriveInput, data: &syn::DataEnum) -> To
 
             let meta_list = match meta {
                 syn::Meta::List(v) => v,
-                _ => panic!("#[{}] format mismatch", attr_name),
+                _ => panic!("#[{}] meta format mismatch", attr_name),
             };
+
+            if meta_list.nested.is_empty() {
+                panic!("#[{}] should have one or more attributes", attr_name)
+            }
 
             let mut ident_list = TokenStream::new();
 
@@ -112,28 +107,18 @@ fn impl_error_rules_derive(input: &syn::DeriveInput, data: &syn::DataEnum) -> To
                         #enum_id::#item_id (i0) => Some(i0),
                     });
                 }
-                _ => panic!("#[{}] format mismatch", attr_name),
+                _ => panic!("#[{}] field format mismatch", attr_name),
             };
 
-            for item in &meta_list.nested {
-                let item_meta = match item {
-                    syn::NestedMeta::Meta(v) => v,
-                    _ => continue,
-                };
-
-                let meta_name = item_meta.name();
-                if meta_name == "display" {
-                    let w = impl_display_item(&item_meta);
-                    if ident_list.is_empty() {
-                        display_list.extend(quote! {
-                            #enum_id::#item_id => #w,
-                        });
-                    } else {
-                        display_list.extend(quote! {
-                            #enum_id::#item_id ( #ident_list ) => #w,
-                        });
-                    }
-                }
+            let w = impl_display_item(&meta_list);
+            if ident_list.is_empty() {
+                display_list.extend(quote! {
+                    #enum_id::#item_id => #w,
+                });
+            } else {
+                display_list.extend(quote! {
+                    #enum_id::#item_id ( #ident_list ) => #w,
+                });
             }
         }
     }
