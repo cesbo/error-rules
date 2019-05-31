@@ -1,18 +1,16 @@
 [package]
 name = "error-rules"
-version = "0.1.3"
+version = "0.2.1"
 authors = ["Andrey Dyldin <and@cesbo.com>"]
-description = "Chained error handling without pain"
+description = "Error handling without pain"
 documentation = "https://docs.rs/error-rules"
 repository = "https://github.com/cesbo/error-rules"
 edition = "2018"
 keywords = ["error"]
 license = "MIT"
 
-[lib]
-proc-macro = true
-
 [dependencies]
-quote = "0.6"
-syn = "0.15"
-proc-macro2 = "0.4"
+error-derive = { path = "./error-derive", version = "0.2" }
+
+[workspace]
+members = [".", "error-derive"]
