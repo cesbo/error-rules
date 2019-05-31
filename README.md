@@ -3,75 +3,87 @@
 [![Latest Version](https://img.shields.io/crates/v/error-rules.svg)](https://crates.io/crates/error-rules)
 [![docs](https://docs.rs/error-rules/badge.svg)](https://docs.rs/error-rules)
 
-Chained error handling in Rust.
-
 ## Intro
 
-Key feature of the `error-rules` is chained error handling.
+error-rules is a derive macro to implement error handler based on the enum.
 
-Idea is simple, each module has own error handler.
-Source error wrapped into error handler with configurable display text.
+Implements next interfaces:
+
+- `std::fmt::Display` for all enum variants
+- `std::error::Error` and `std::convert::From` for source errors
 
 ## Usage
 
 ```rust
-#[macro_use]
-extern crate error_rules;
+use std::io;
+use error_rules::*;
 
-pub mod human {
-    use std::io;
+#[derive(Debug, Error)]
+enum HumanError {
+    #[error_from("Human IO => {}", 0)]
+    Io(io::Error),
+    #[error_kind("Human => not found")]
+    NotFound,
+}
 
-    error_rules! {
-        Error => ("Human => {}", error),
-        io::Error,
-    }
+#[derive(Default)]
+struct Human;
 
-    #[derive(Default)]
-    pub struct Human;
-
-    impl Human {
-        pub fn invoke_failure(&self) -> Result<()> {
-            bail!(io::Error::from(io::ErrorKind::PermissionDenied));
-        }
+impl Human {
+    pub fn invoke_failure(&self) -> Result<(), HumanError> {
+        Err(io::Error::from(io::ErrorKind::PermissionDenied))?;
+        unreachable!()
     }
 }
 
-pub mod bike {
-    use std::io;
-    use crate::human;
+#[derive(Debug, Error)]
+enum BikeError {
+    #[error_from("Bike IO => {}", 0)]
+    Io(io::Error),
+    #[error_from("Bike => {}", 0)]
+    Human(HumanError),
+    #[error_kind("Bike => speed limit")]
+    SpeedLimit,
+}
 
-    error_rules! {
-        Error => ("Bike => {}", error),
-        io::Error,
-        human::Error,
+#[derive(Default)]
+struct Bike(Human);
+
+impl Bike {
+    pub fn ride(&self) -> Result<(), BikeError> {
+        self.0.invoke_failure()?;
+        unreachable!()
     }
 
-    #[derive(Default)]
-    pub struct Bike(human::Human);
-
-    impl Bike {
-        pub fn ride(&self) -> Result<()> {
-            self.0.invoke_failure()?;
-            Ok(())
-        }
-
-        pub fn invoke_failure(&self) -> Result<()> {
-            bail!(io::Error::from(io::ErrorKind::PermissionDenied));
-        }
+    pub fn invoke_failure(&self) -> Result<(), BikeError> {
+        Err(io::Error::from(io::ErrorKind::PermissionDenied))?;
+        unreachable!()
     }
 }
 
-let b = bike::Bike::default();
+let b = Bike::default();
 
 let error = b.ride().unwrap_err();
-assert_eq!(
-    error.to_string().as_str(),
-    "Bike => Human => permission denied"
-);
+assert_eq!(error.to_string().as_str(),
+    "Bike => Human IO => permission denied");
 
 let error = b.invoke_failure().unwrap_err();
-assert_eq!(
-    error.to_string().as_str(),
-    "Bike => permission denied"
-);
+assert_eq!(error.to_string().as_str(),
+    "Bike IO => permission denied");
 ```
+
+## error_from
+
+error_from attribute implements a converter from any error type into `Error`.
+Converted type should implements `std::error::Error` itnerface.
+
+## error_kind
+
+error_kind attribute describes additional variant for `Error`.
+Could be defined without fields or with fields tuple
+
+## display attributes
+
+`error_from` and `error_kind` contain list of attributes to display error.
+First attribute should be literal string. Other attributes is a number of the
+unnamed field in the tuple. Started from 0.
