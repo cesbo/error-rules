@@ -22,13 +22,13 @@ pub fn error_rules_derive(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 
 
 fn impl_display_item(meta_list: &syn::MetaList) -> TokenStream {
-    let mut attr_list: Vec<TokenStream> = Vec::new();
+    let mut attr_list = TokenStream::new();
 
     let fmt = match &meta_list.nested[0] {
         syn::NestedMeta::Literal(syn::Lit::Str(v)) => v.value(),
         _ => panic!("first attribute shoud be literal"),
     };
-    attr_list.push(quote! { #fmt });
+    attr_list.extend(quote! { #fmt });
 
     for attr in meta_list.nested.iter().skip(1) {
         let attr = match attr {
@@ -37,10 +37,10 @@ fn impl_display_item(meta_list: &syn::MetaList) -> TokenStream {
         };
 
         let attr_id = Ident::new(&format!("i{}", attr), Span::call_site());
-        attr_list.push(quote! { #attr_id });
+        attr_list.extend(quote! { , #attr_id });
     }
 
-    quote! { write!(f, #( #attr_list, )*) }
+    quote! { write!(f, #attr_list) }
 }
 
 
@@ -60,6 +60,7 @@ fn impl_error_rules_derive(input: &syn::DeriveInput, data: &syn::DataEnum) -> To
 
     for variant in &data.variants {
         let item_id = &variant.ident;
+        let item_id = quote! { #enum_id::#item_id };
 
         for attr in &variant.attrs {
             let meta = attr.parse_meta().unwrap();
@@ -100,11 +101,11 @@ fn impl_error_rules_derive(input: &syn::DeriveInput, data: &syn::DataEnum) -> To
                     from_list.extend(quote! {
                         impl From<#ty> for #enum_id {
                             #[inline]
-                            fn from(e: #ty) -> #enum_id { #enum_id::#item_id ( e ) }
+                            fn from(e: #ty) -> #enum_id { #item_id ( e ) }
                         }
                     });
                     source_list.extend(quote! {
-                        #enum_id::#item_id (i0) => Some(i0),
+                        #item_id (i0) => Some(i0),
                     });
                 }
                 _ => panic!("#[{}] field format mismatch", attr_name),
@@ -113,11 +114,11 @@ fn impl_error_rules_derive(input: &syn::DeriveInput, data: &syn::DataEnum) -> To
             let w = impl_display_item(&meta_list);
             if ident_list.is_empty() {
                 display_list.extend(quote! {
-                    #enum_id::#item_id => #w,
+                    #item_id => #w,
                 });
             } else {
                 display_list.extend(quote! {
-                    #enum_id::#item_id ( #ident_list ) => #w,
+                    #item_id ( #ident_list ) => #w,
                 });
             }
         }
