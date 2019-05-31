@@ -10,8 +10,9 @@ keywords = ["error"]
 license = "MIT"
 readme = "README.md"
 
-[dependencies]
-error-derive = { path = "./error-derive", version = "0.2" }
+[dependencies.error-derive]
+path = "./error-derive"
+version = "0.2"
 
 [workspace]
 members = [".", "error-derive"]
