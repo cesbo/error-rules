@@ -10,9 +10,10 @@ keywords = ["error"]
 license = "MIT"
 readme = "README.md"
 
-[dependencies.error-derive]
-path = "./error-derive"
-version = "0.2"
+[lib]
+proc-macro = true
 
-[workspace]
-members = [".", "error-derive"]
+[dependencies]
+quote = "0.6"
+syn = "0.15"
+proc-macro2 = "0.4"
