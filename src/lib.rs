@@ -120,19 +120,6 @@ use syn::{
 };
 
 
-#[proc_macro_derive(Error, attributes(error_from, error_kind))]
-pub fn error_rules_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as syn::DeriveInput);
-
-
-    if let syn::Data::Enum(ref s) = input.data {
-        impl_error_rules_derive(&input, s).into()
-    } else {
-        panic!("#[derive(Error)] only for enum")
-    }
-}
-
-
 fn impl_display_item(meta_list: &syn::MetaList) -> TokenStream {
     let mut attr_list = TokenStream::new();
 
@@ -156,106 +143,162 @@ fn impl_display_item(meta_list: &syn::MetaList) -> TokenStream {
 }
 
 
-fn impl_error_rules_derive(input: &syn::DeriveInput, data: &syn::DataEnum) -> TokenStream {
+struct ErrorRules {
+    enum_id: Ident,
+    from_list: TokenStream,
+    source_list: TokenStream,
+    display_list: TokenStream,
+}
 
-    let enum_id = &input.ident;
 
-    let mut from_list = TokenStream::new();
-    let mut source_list = TokenStream::new();
-    let mut display_list = TokenStream::new();
+impl ErrorRules {
+    fn new(ident: &Ident) -> ErrorRules {
+        ErrorRules {
+            enum_id: ident.clone(),
+            from_list: TokenStream::default(),
+            source_list: TokenStream::default(),
+            display_list: TokenStream::default(),
+        }
+    }
 
-    #[derive(PartialEq)]
-    enum AttrType {
-        ErrorFrom,
-        ErrorKind,
-    };
+    fn impl_error_from_list(&mut self, variant: &syn::Variant, meta_list: &syn::MetaList) {
+        if meta_list.nested.is_empty() {
+            // TODO:
+            return;
+        }
 
-    for variant in &data.variants {
+        let enum_id = &self.enum_id;
         let item_id = &variant.ident;
         let item_id = quote! { #enum_id::#item_id };
+        let mut ident_list = TokenStream::new();
 
-        for attr in &variant.attrs {
-            let meta = attr.parse_meta().unwrap();
-
-            let attr_name = meta.name().to_string();
-            let attr_type = match attr_name.as_str() {
-                "error_from" => AttrType::ErrorFrom,
-                "error_kind" => AttrType::ErrorKind,
-                _ => continue,
-            };
-
-            let meta_list = match meta {
-                syn::Meta::List(v) => v,
-                _ => panic!("#[{}] meta format mismatch", attr_name),
-            };
-
-            if meta_list.nested.is_empty() {
-                panic!("#[{}] should have one or more attributes", attr_name)
+        match &variant.fields {
+            syn::Fields::Unnamed(fields) => {
+                if fields.unnamed.len() != 1 {
+                    panic!("varian should contain one field")
+                }
+                ident_list.extend(quote! { i0 });
+                let field = &fields.unnamed[0];
+                let ty = &field.ty;
+                self.from_list.extend(quote! {
+                    impl From<#ty> for #enum_id {
+                        #[inline]
+                        fn from(e: #ty) -> #enum_id { #item_id ( e ) }
+                    }
+                });
+                self.source_list.extend(quote! {
+                    #item_id (i0) => Some(i0),
+                });
             }
+            _ => panic!("field format mismatch"),
+        };
 
-            let mut ident_list = TokenStream::new();
+        let w = impl_display_item(&meta_list);
+        self.display_list.extend(quote! {
+            #item_id ( #ident_list ) => #w,
+        });
+    }
 
-            match &variant.fields {
-                syn::Fields::Unit if attr_type == AttrType::ErrorKind => {}
-                syn::Fields::Unnamed(fields) if attr_type == AttrType::ErrorKind => {
-                    for i in 0 .. fields.unnamed.len() {
-                        let field_id = Ident::new(&format!("i{}", i), Span::call_site());
-                        ident_list.extend(quote! { #field_id, });
-                    }
+    fn impl_error_from(&mut self, variant: &syn::Variant, meta: &syn::Meta) {
+        match meta {
+            syn::Meta::List(v) => self.impl_error_from_list(variant, v),
+            _ => panic!("meta format mismatch"),
+        }
+    }
+
+    fn impl_error_kind_list(&mut self, variant: &syn::Variant, meta_list: &syn::MetaList) {
+        if meta_list.nested.is_empty() {
+            // TODO:
+            return;
+        }
+
+        let enum_id = &self.enum_id;
+        let item_id = &variant.ident;
+        let item_id = quote! { #enum_id::#item_id };
+        let mut ident_list = TokenStream::new();
+
+        match &variant.fields {
+            syn::Fields::Unit => {}
+            syn::Fields::Unnamed(fields) => {
+                for i in 0 .. fields.unnamed.len() {
+                    let field_id = Ident::new(&format!("i{}", i), Span::call_site());
+                    ident_list.extend(quote! { #field_id, });
                 }
-                syn::Fields::Unnamed(fields) if attr_type == AttrType::ErrorFrom => {
-                    if fields.unnamed.len() != 1 {
-                        panic!("#[{}] varian should contain one field", attr_name)
-                    }
-                    ident_list.extend(quote! { i0 });
-                    let field = &fields.unnamed[0];
-                    let ty = &field.ty;
-                    from_list.extend(quote! {
-                        impl From<#ty> for #enum_id {
-                            #[inline]
-                            fn from(e: #ty) -> #enum_id { #item_id ( e ) }
-                        }
-                    });
-                    source_list.extend(quote! {
-                        #item_id (i0) => Some(i0),
-                    });
-                }
-                _ => panic!("#[{}] field format mismatch", attr_name),
-            };
+            }
+            _ => panic!("field format mismatch"),
+        };
 
-            let w = impl_display_item(&meta_list);
-            if ident_list.is_empty() {
-                display_list.extend(quote! {
-                    #item_id => #w,
-                });
-            } else {
-                display_list.extend(quote! {
-                    #item_id ( #ident_list ) => #w,
-                });
+        let w = impl_display_item(&meta_list);
+        if ident_list.is_empty() {
+            self.display_list.extend(quote! {
+                #item_id => #w,
+            });
+        } else {
+            self.display_list.extend(quote! {
+                #item_id ( #ident_list ) => #w,
+            });
+        }
+    }
+
+    fn impl_error_kind(&mut self, variant: &syn::Variant, meta: &syn::Meta) {
+        match meta {
+            syn::Meta::List(v) => self.impl_error_kind_list(variant, v),
+            _ => panic!("meta format mismatch"),
+        }
+    }
+
+    fn impl_variant(&mut self, variant: &syn::Variant) {
+        for attr in variant.attrs.iter().filter(|v| v.path.segments.len() == 1) {
+            match attr.path.segments[0].ident.to_string().as_str() {
+                "error_from" => self.impl_error_from(variant, &attr.parse_meta().unwrap()),
+                "error_kind" => self.impl_error_kind(variant, &attr.parse_meta().unwrap()),
+                _ => continue,
             }
         }
     }
 
-    let expanded = quote! {
-        impl std::fmt::Display for #enum_id {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                match self {
-                    #display_list
-                }
-            }
+    fn build(&mut self, data: &syn::DataEnum) -> TokenStream {
+        for variant in &data.variants {
+            self.impl_variant(variant);
         }
 
-        impl std::error::Error for #enum_id {
-            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-                match self {
-                    #source_list
-                    _ => None,
+        let enum_id = &self.enum_id;
+        let display_list = &self.display_list;
+        let source_list = &self.source_list;
+        let from_list = &self.from_list;
+
+        quote! {
+            impl std::fmt::Display for #enum_id {
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    match self {
+                        #display_list
+                    }
                 }
             }
+
+            impl std::error::Error for #enum_id {
+                fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                    match self {
+                        #source_list
+                        _ => None,
+                    }
+                }
+            }
+
+            #from_list
         }
+    }
+}
 
-        #from_list
-    };
 
-    expanded
+#[proc_macro_derive(Error, attributes(error_from, error_kind))]
+pub fn error_rules_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
+
+    if let syn::Data::Enum(ref s) = input.data {
+        let mut error_rules = ErrorRules::new(&input.ident);
+        error_rules.build(s).into()
+    } else {
+        panic!("enum required")
+    }
 }
