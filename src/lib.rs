@@ -170,14 +170,12 @@ impl ErrorRules {
         let enum_id = &self.enum_id;
         let item_id = &variant.ident;
         let item_id = quote! { #enum_id::#item_id };
-        let mut ident_list = TokenStream::new();
 
         match &variant.fields {
             syn::Fields::Unnamed(fields) => {
                 if fields.unnamed.len() != 1 {
-                    panic!("varian should contain one field")
+                    panic!("variant should contain one field")
                 }
-                ident_list.extend(quote! { i0 });
                 let field = &fields.unnamed[0];
                 let ty = &field.ty;
                 self.from_list.extend(quote! {
@@ -195,7 +193,7 @@ impl ErrorRules {
 
         let w = impl_display_item(&meta_list);
         self.display_list.extend(quote! {
-            #item_id ( #ident_list ) => #w,
+            #item_id ( i0 ) => #w,
         });
     }
 
@@ -215,29 +213,26 @@ impl ErrorRules {
         let enum_id = &self.enum_id;
         let item_id = &variant.ident;
         let item_id = quote! { #enum_id::#item_id };
-        let mut ident_list = TokenStream::new();
+        let w = impl_display_item(&meta_list);
 
         match &variant.fields {
-            syn::Fields::Unit => {}
+            syn::Fields::Unit => {
+                self.display_list.extend(quote! {
+                    #item_id => #w,
+                });
+            }
             syn::Fields::Unnamed(fields) => {
+                let mut ident_list = TokenStream::new();
                 for i in 0 .. fields.unnamed.len() {
                     let field_id = Ident::new(&format!("i{}", i), Span::call_site());
                     ident_list.extend(quote! { #field_id, });
                 }
+                self.display_list.extend(quote! {
+                    #item_id ( #ident_list ) => #w,
+                });
             }
             _ => panic!("field format mismatch"),
         };
-
-        let w = impl_display_item(&meta_list);
-        if ident_list.is_empty() {
-            self.display_list.extend(quote! {
-                #item_id => #w,
-            });
-        } else {
-            self.display_list.extend(quote! {
-                #item_id ( #ident_list ) => #w,
-            });
-        }
     }
 
     fn impl_error_kind(&mut self, variant: &syn::Variant, meta: &syn::Meta) {
