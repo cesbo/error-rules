@@ -51,3 +51,18 @@ fn test_error_from() {
     assert_eq!(e.to_string().as_str(), "io:permission denied");
     assert_eq!(std::error::Error::source(&e).unwrap().to_string().as_str(), "permission denied");
 }
+
+
+#[test]
+fn test_error_from_wo_attrs() {
+    use std::io;
+
+    #[derive(Debug, Error)]
+    enum F {
+        #[error_from]
+        Io(io::Error),
+    }
+
+    let e: F = io::Error::from(io::ErrorKind::PermissionDenied).into();
+    assert_eq!(e.to_string().as_str(), "permission denied");
+}

@@ -12,7 +12,7 @@
 //! ## Error conversion
 //!
 //! `#[error_from]` attribute implements an automatically conversion from any error type.
-//! Converted type should implements `std::error::Error` itnerface.
+//! Converted type should implements `std::error::Error` interface.
 //!
 //! ```rust
 //! use error_rules::*;
@@ -75,6 +75,8 @@
 //! `#[error_from]` and `#[error_kind]` contain list of attributes to display error.
 //! First attribute should be literal string. Other attributes is a number of the
 //! unnamed field in the tuple. Started from 0.
+//!
+//! `#[error_from]` could defined without attributes it's equal to `#[error_from("{}", 0)]`
 //!
 //! ## Error chain
 //!
@@ -139,7 +141,7 @@ fn impl_display_item(meta_list: &syn::MetaList) -> TokenStream {
         attr_list.extend(quote! { , #attr_id });
     }
 
-    quote! { write!(f, #attr_list) }
+    attr_list
 }
 
 
@@ -161,15 +163,11 @@ impl ErrorRules {
         }
     }
 
-    fn impl_error_from_list(&mut self, variant: &syn::Variant, meta_list: &syn::MetaList) {
-        if meta_list.nested.is_empty() {
-            // TODO:
-            return;
-        }
-
+    fn impl_error_from_fields(&mut self,
+        item_id: &TokenStream,
+        variant: &syn::Variant)
+    {
         let enum_id = &self.enum_id;
-        let item_id = &variant.ident;
-        let item_id = quote! { #enum_id::#item_id };
 
         match &variant.fields {
             syn::Fields::Unnamed(fields) => {
@@ -190,35 +188,63 @@ impl ErrorRules {
             }
             _ => panic!("field format mismatch"),
         };
+    }
 
-        let w = impl_display_item(&meta_list);
+    fn impl_error_from_word(&mut self,
+        item_id: &TokenStream,
+        variant: &syn::Variant)
+    {
+        self.impl_error_from_fields(&item_id, variant);
+
         self.display_list.extend(quote! {
-            #item_id ( i0 ) => #w,
+            #item_id ( i0 ) => write!(f, "{}", i0),
         });
     }
 
-    fn impl_error_from(&mut self, variant: &syn::Variant, meta: &syn::Meta) {
+    fn impl_error_from_list(&mut self,
+        item_id: &TokenStream,
+        variant: &syn::Variant,
+        meta_list: &syn::MetaList)
+    {
+        if meta_list.nested.is_empty() {
+            self.impl_error_from_word(item_id, variant);
+            return
+        }
+
+        self.impl_error_from_fields(item_id, variant);
+
+        let w = impl_display_item(meta_list);
+        self.display_list.extend(quote! {
+            #item_id ( i0 ) => write!(f, #w),
+        });
+    }
+
+    fn impl_error_from(&mut self,
+        item_id: &TokenStream,
+        variant: &syn::Variant,
+        meta: &syn::Meta)
+    {
         match meta {
-            syn::Meta::List(v) => self.impl_error_from_list(variant, v),
+            syn::Meta::Word(_) => self.impl_error_from_word(item_id, variant),
+            syn::Meta::List(v) => self.impl_error_from_list(item_id, variant, v),
             _ => panic!("meta format mismatch"),
         }
     }
 
-    fn impl_error_kind_list(&mut self, variant: &syn::Variant, meta_list: &syn::MetaList) {
+    fn impl_error_kind_list(&mut self,
+        item_id: &TokenStream,
+        variant: &syn::Variant,
+        meta_list: &syn::MetaList)
+    {
         if meta_list.nested.is_empty() {
-            // TODO:
-            return;
+            panic!("meta format mismatch")
         }
-
-        let enum_id = &self.enum_id;
-        let item_id = &variant.ident;
-        let item_id = quote! { #enum_id::#item_id };
-        let w = impl_display_item(&meta_list);
 
         match &variant.fields {
             syn::Fields::Unit => {
+                let w = impl_display_item(meta_list);
                 self.display_list.extend(quote! {
-                    #item_id => #w,
+                    #item_id => write!(f, #w),
                 });
             }
             syn::Fields::Unnamed(fields) => {
@@ -227,27 +253,45 @@ impl ErrorRules {
                     let field_id = Ident::new(&format!("i{}", i), Span::call_site());
                     ident_list.extend(quote! { #field_id, });
                 }
+
+                let w = impl_display_item(meta_list);
                 self.display_list.extend(quote! {
-                    #item_id ( #ident_list ) => #w,
+                    #item_id ( #ident_list ) => write!(f, #w),
                 });
             }
             _ => panic!("field format mismatch"),
         };
     }
 
-    fn impl_error_kind(&mut self, variant: &syn::Variant, meta: &syn::Meta) {
+    fn impl_error_kind(&mut self,
+        item_id: &TokenStream,
+        variant: &syn::Variant,
+        meta: &syn::Meta)
+    {
         match meta {
-            syn::Meta::List(v) => self.impl_error_kind_list(variant, v),
+            syn::Meta::List(v) => self.impl_error_kind_list(item_id, variant, v),
             _ => panic!("meta format mismatch"),
         }
     }
 
     fn impl_variant(&mut self, variant: &syn::Variant) {
+        let enum_id = &self.enum_id;
+        let item_id = &variant.ident;
+        let item_id = quote! { #enum_id::#item_id };
+
         for attr in variant.attrs.iter().filter(|v| v.path.segments.len() == 1) {
             match attr.path.segments[0].ident.to_string().as_str() {
-                "error_from" => self.impl_error_from(variant, &attr.parse_meta().unwrap()),
-                "error_kind" => self.impl_error_kind(variant, &attr.parse_meta().unwrap()),
-                _ => continue,
+                "error_from" => {
+                    let meta = attr.parse_meta().unwrap();
+                    self.impl_error_from(&item_id, variant, &meta);
+                    break
+                }
+                "error_kind" => {
+                    let meta = attr.parse_meta().unwrap();
+                    self.impl_error_kind(&item_id, variant, &meta);
+                    break
+                }
+                _ => {},
             }
         }
     }

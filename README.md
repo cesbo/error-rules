@@ -12,7 +12,7 @@ Macro automatically implements conversion of any error type into the inner enum 
 ## Error conversion
 
 `#[error_from]` attribute implements an automatically conversion from any error type.
-Converted type should implements `std::error::Error` itnerface.
+Converted type should implements `std::error::Error` interface.
 
 ```rust
 use error_rules::*;
@@ -75,6 +75,8 @@ assert_eq!(error.to_string().as_str(),
 `#[error_from]` and `#[error_kind]` contain list of attributes to display error.
 First attribute should be literal string. Other attributes is a number of the
 unnamed field in the tuple. Started from 0.
+
+`#[error_from]` could defined without attributes it's equal to `#[error_from("{}", 0)]`
 
 ## Error chain
 
