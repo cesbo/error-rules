@@ -1,6 +1,6 @@
 [package]
 name = "error-rules"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Andrey Dyldin <and@cesbo.com>"]
 description = "Error handling without pain"
 documentation = "https://docs.rs/error-rules"
