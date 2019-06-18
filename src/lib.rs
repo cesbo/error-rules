@@ -78,6 +78,33 @@
 //!
 //! `#[error_from]` could defined without attributes it's equal to `#[error_from("{}", 0)]`
 //!
+//! ## Error prefix
+//!
+//! `#[error_prefix]` attribute should be defined before enum declaration and
+//! appends prefix into error text.
+//!
+//! ```rust
+//! use error_rules::*;
+//!
+//! #[derive(Debug, Error)]
+//! #[error_prefx = "App"]
+//! enum AppError {
+//!     #[error_from]
+//!     Io(std::io::Error),
+//! }
+//!
+//! type Result<T> = std::result::Result<T, AppError>;
+//!
+//! fn example() -> Result<()> {
+//!     let _file = std::fs::File::open("not-found.txt")?;
+//!     unreachable!()
+//! }
+//!
+//! let error = example().unwrap_err();
+//! assert_eq!(error.to_string().as_str(),
+//!     "App: No such file or directory (os error 2)");
+//! ```
+//!
 //! ## Error chain
 //!
 //! By implementing error for nested modules the primary error handler returns full chain of the error.
@@ -86,8 +113,9 @@
 //! use error_rules::*;
 //!
 //! #[derive(Debug, Error)]
+//! #[error_prefix = "Mod"]
 //! enum ModError {
-//!     #[error_from("Mod IO: {}", 0)]
+//!     #[error_from]
 //!     Io(std::io::Error),
 //! }
 //!
@@ -97,8 +125,9 @@
 //! }
 //!
 //! #[derive(Debug, Error)]
+//! #[error_prefix = "App"]
 //! enum AppError {
-//!     #[error_from("App: {}", 0)]
+//!     #[error_from]
 //!     Mod(ModError),
 //! }
 //!
@@ -109,7 +138,7 @@
 //!
 //! let error = app_example().unwrap_err();
 //! assert_eq!(error.to_string().as_str(),
-//!     "App: Mod IO: No such file or directory (os error 2)");
+//!     "App: Mod: No such file or directory (os error 2)");
 //! ```
 
 extern crate proc_macro;
@@ -147,6 +176,7 @@ fn impl_display_item(meta_list: &syn::MetaList) -> TokenStream {
 
 struct ErrorRules {
     enum_id: Ident,
+    prefix: String,
     from_list: TokenStream,
     source_list: TokenStream,
     display_list: TokenStream,
@@ -157,6 +187,7 @@ impl ErrorRules {
     fn new(ident: &Ident) -> ErrorRules {
         ErrorRules {
             enum_id: ident.clone(),
+            prefix: String::default(),
             from_list: TokenStream::default(),
             source_list: TokenStream::default(),
             display_list: TokenStream::default(),
@@ -306,9 +337,18 @@ impl ErrorRules {
         let source_list = &self.source_list;
         let from_list = &self.from_list;
 
+        let mut display_prefix = TokenStream::new();
+        if ! self.prefix.is_empty() {
+            let prefix = &self.prefix;
+            display_prefix.extend(quote! {
+                write!(f, "{}: ", #prefix)?;
+            });
+        }
+
         quote! {
             impl std::fmt::Display for #enum_id {
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    #display_prefix
                     match self {
                         #display_list
                     }
@@ -327,15 +367,33 @@ impl ErrorRules {
             #from_list
         }
     }
+
+    fn set_attrs(&mut self, attrs: &Vec<syn::Attribute>) {
+        for attr in attrs.iter().filter(|v| v.path.segments.len() == 1) {
+            match attr.path.segments[0].ident.to_string().as_str() {
+                "error_prefix" => {
+                    if let syn::Meta::NameValue(v) = &attr.parse_meta().unwrap() {
+                        if let syn::Lit::Str(v) = &v.lit {
+                            self.prefix = v.value();
+                            break
+                        }
+                    }
+                    panic!("meta format mismatch")
+                }
+                _ => {},
+            }
+        }
+    }
 }
 
 
-#[proc_macro_derive(Error, attributes(error_from, error_kind))]
+#[proc_macro_derive(Error, attributes(error_from, error_kind, error_prefix))]
 pub fn error_rules_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
 
     if let syn::Data::Enum(ref s) = input.data {
         let mut error_rules = ErrorRules::new(&input.ident);
+        error_rules.set_attrs(&input.attrs);
         error_rules.build(s).into()
     } else {
         panic!("enum required")

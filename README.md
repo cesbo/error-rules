@@ -78,6 +78,33 @@ unnamed field in the tuple. Started from 0.
 
 `#[error_from]` could defined without attributes it's equal to `#[error_from("{}", 0)]`
 
+## Error prefix
+
+`#[error_prefix]` attribute should be defined before enum declaration and
+appends prefix into error text.
+
+```rust
+use error_rules::*;
+
+#[derive(Debug, Error)]
+#[error_prefx = "App"]
+enum AppError {
+    #[error_from]
+    Io(std::io::Error),
+}
+
+type Result<T> = std::result::Result<T, AppError>;
+
+fn example() -> Result<()> {
+    let _file = std::fs::File::open("not-found.txt")?;
+    unreachable!()
+}
+
+let error = example().unwrap_err();
+assert_eq!(error.to_string().as_str(),
+    "App: No such file or directory (os error 2)");
+```
+
 ## Error chain
 
 By implementing error for nested modules the primary error handler returns full chain of the error.
@@ -86,8 +113,9 @@ By implementing error for nested modules the primary error handler returns full 
 use error_rules::*;
 
 #[derive(Debug, Error)]
+#[error_prefix = "Mod"]
 enum ModError {
-    #[error_from("Mod IO: {}", 0)]
+    #[error_from]
     Io(std::io::Error),
 }
 
@@ -97,8 +125,9 @@ fn mod_example() -> Result<(), ModError> {
 }
 
 #[derive(Debug, Error)]
+#[error_prefix = "App"]
 enum AppError {
-    #[error_from("App: {}", 0)]
+    #[error_from]
     Mod(ModError),
 }
 
@@ -109,5 +138,5 @@ fn app_example() -> Result<(), AppError> {
 
 let error = app_example().unwrap_err();
 assert_eq!(error.to_string().as_str(),
-    "App: Mod IO: No such file or directory (os error 2)");
+    "App: Mod: No such file or directory (os error 2)");
 ```
