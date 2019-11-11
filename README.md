@@ -1,12 +1,10 @@
 # error-rules
 
-[![Latest Version](https://img.shields.io/crates/v/error-rules.svg)](https://crates.io/crates/error-rules)
 [![docs](https://docs.rs/error-rules/badge.svg)](https://docs.rs/error-rules)
 
 ## Intro
 
-error-rules is a derive macro to implement error handler.
-Error handler based on the enum.
+error-rules is a derive macro to implement error handler with a errors chaining.
 Macro automatically implements conversion of any error type into the inner enum field.
 
 ## Error conversion

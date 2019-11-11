@@ -1,6 +1,6 @@
 [package]
 name = "error-rules"
-version = "0.2.5"
+version = "1.0.0"
 authors = ["Andrey Dyldin <and@cesbo.com>"]
 description = "Error handling without pain"
 documentation = "https://docs.rs/error-rules"
@@ -14,6 +14,6 @@ readme = "README.md"
 proc-macro = true
 
 [dependencies]
-quote = "0.6"
-syn = "0.15"
-proc-macro2 = "0.4"
+quote = "1.0"
+syn = "1.0"
+proc-macro2 = "1.0"

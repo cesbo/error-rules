@@ -87,7 +87,7 @@
 //! use error_rules::*;
 //!
 //! #[derive(Debug, Error)]
-//! #[error_prefx = "App"]
+//! #[error_prefix = "App"]
 //! enum AppError {
 //!     #[error_from]
 //!     Io(std::io::Error),
@@ -155,14 +155,14 @@ fn impl_display_item(meta_list: &syn::MetaList) -> TokenStream {
     let mut attr_list = TokenStream::new();
 
     let fmt = match &meta_list.nested[0] {
-        syn::NestedMeta::Literal(syn::Lit::Str(v)) => v.value(),
+        syn::NestedMeta::Lit(syn::Lit::Str(v)) => v.value(),
         _ => panic!("first attribute shoud be literal"),
     };
     attr_list.extend(quote! { #fmt });
 
     for attr in meta_list.nested.iter().skip(1) {
         let attr = match attr {
-            syn::NestedMeta::Literal(syn::Lit::Int(v)) => v.value(),
+            syn::NestedMeta::Lit(syn::Lit::Int(v)) => v.base10_parse::<u32>().unwrap(),
             _ => panic!("attributes should be number"),
         };
 
@@ -221,7 +221,7 @@ impl ErrorRules {
         };
     }
 
-    fn impl_error_from_word(&mut self,
+    fn impl_error_from_path(&mut self,
         item_id: &TokenStream,
         variant: &syn::Variant)
     {
@@ -238,7 +238,7 @@ impl ErrorRules {
         meta_list: &syn::MetaList)
     {
         if meta_list.nested.is_empty() {
-            self.impl_error_from_word(item_id, variant);
+            self.impl_error_from_path(item_id, variant);
             return
         }
 
@@ -256,7 +256,7 @@ impl ErrorRules {
         meta: &syn::Meta)
     {
         match meta {
-            syn::Meta::Word(_) => self.impl_error_from_word(item_id, variant),
+            syn::Meta::Path(_) => self.impl_error_from_path(item_id, variant),
             syn::Meta::List(v) => self.impl_error_from_list(item_id, variant, v),
             _ => panic!("meta format mismatch"),
         }
