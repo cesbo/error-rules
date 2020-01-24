@@ -364,6 +364,12 @@ impl ErrorRules {
                 }
             }
 
+            impl From<#enum_id> for std::io::Error {
+                fn from(error: #enum_id) -> Self {
+                    Self::new(std::io::ErrorKind::Other, error)
+                }
+            }
+
             #from_list
         }
     }
