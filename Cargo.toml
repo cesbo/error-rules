@@ -1,8 +1,8 @@
 [package]
 name = "error-rules"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Andrey Dyldin <and@cesbo.com>"]
-description = "Error handling without pain"
+description = "Archived! Error handling without pain"
 documentation = "https://docs.rs/error-rules"
 repository = "https://github.com/cesbo/error-rules"
 edition = "2018"

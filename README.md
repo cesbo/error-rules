@@ -2,6 +2,10 @@
 
 [![docs](https://docs.rs/error-rules/badge.svg)](https://docs.rs/error-rules)
 
+## Archived
+
+Project archived. I recommend to use [anyhow](https://crates.io/crates/anyhow) + [thiserror](https://crates.io/crates/thiserror).
+
 ## Intro
 
 error-rules is a derive macro to implement error handler with a errors chaining.
